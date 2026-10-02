@@ -72,9 +72,9 @@ html,body { background:var(--bg0); color:var(--white); font-family:var(--mono); 
 .decision-panel { background:var(--bg1); border:1px solid var(--border2); border-radius:4px; padding:12px 14px; }
 .decision-label { font-size:9px; letter-spacing:2px; color:var(--muted); margin-bottom:6px; font-weight:700; }
 .decision-badge { font-size:34px; font-weight:600; letter-spacing:3px; line-height:1; margin-bottom:2px; transition:color 0.4s; text-align:center; }
-.decision-badge.FULL    { color:var(--green); }
-.decision-badge.REDUCED { color:var(--amber); }
-.decision-badge.SMALL   { color:var(--red); }
+.decision-badge.YES     { color:var(--green); }
+.decision-badge.CAUTION { color:var(--amber); }
+.decision-badge.NO      { color:var(--red); }
 /* Ring + mode-diff side by side */
 .decision-body { display:flex; align-items:center; gap:10px; margin-top:6px; }
 .score-ring-wrap { position:relative; width:88px; height:88px; flex-shrink:0; }
@@ -182,7 +182,6 @@ html,body { background:var(--bg0); color:var(--white); font-family:var(--mono); 
   padding:6px 10px; border-radius:3px; white-space:nowrap;
   z-index:100; pointer-events:none; line-height:1.5;
 }
-.wrap-tip[data-tip]:hover::after { white-space:normal; width:260px; }
 [data-tip]:hover::before {
   content:''; position:absolute; bottom:calc(100% + 1px); left:50%;
   transform:translateX(-50%);
@@ -263,8 +262,8 @@ body.stale .main { opacity:0.45; }
   <!-- HERO -->
   <div class="hero-row">
     <div class="decision-panel">
-      <div class="decision-label">POSITION SIZE · RISK REGIME</div>
-      <div class="decision-badge REDUCED wrap-tip" id="decision-badge" data-tip="Backtest 2019–2026: next-10d SPY volatility ~10% (FULL) / 13% (REDUCED) / 23% (SMALL) ann. Forward returns were not lower in SMALL.">—</div>
+      <div class="decision-label">SHOULD I BE TRADING?</div>
+      <div class="decision-badge CAUTION" id="decision-badge">—</div>
       <div class="decision-body">
         <div class="score-ring-wrap">
           <svg width="88" height="88" viewBox="0 0 88 88">
@@ -319,7 +318,7 @@ body.stale .main { opacity:0.45; }
       <div class="exec-row">
         <!-- EWS -->
         <div class="exec-panel">
-          <div class="panel-title" data-tip="Breakout = first close above prior 20-day high, S&P 500 stocks. Score = % still above that pivot 5 sessions later.">EXECUTION WINDOW · BREAKOUT FOLLOW-THROUGH</div>
+          <div class="panel-title">EXECUTION WINDOW SCORE</div>
           <div class="exec-score-row">
             <div class="exec-score-num" id="ews-num" style="color:var(--amber)">—</div>
             <div class="exec-sub" id="ews-label">/ 100</div>
@@ -348,16 +347,16 @@ body.stale .main { opacity:0.45; }
   <!-- LEADING STOCKS + EWS DETAIL -->
   <div class="leads-row">
     <div class="leads-panel">
-      <div class="panel-title">RS LEADERS — TOP 5 OF S&amp;P 500 (20D VS SPY)</div>
+      <div class="panel-title">RS LEADERS — TOP 5 RELATIVE STRENGTH (20D VS SPY)</div>
       <div class="lead-row" style="font-size:9px;color:var(--muted);border-bottom:1px solid var(--border2);padding-bottom:4px;">
-        <span>SYMBOL</span><span></span><span>5D RET</span><span>RS vs SPY</span><span>VS MA20</span>
+        <span>SYMBOL</span><span></span><span>5D RET</span><span>RS vs SPY</span><span>HOLDING</span>
       </div>
       <div id="leaders-rows">Loading...</div>
     </div>
     <div class="leads-panel">
-      <div class="panel-title">RS LAGGARDS — BOTTOM 3 OF S&amp;P 500 (20D VS SPY)</div>
+      <div class="panel-title">RS LAGGARDS — BOTTOM 3 + SECTOR CONTEXT</div>
       <div class="lead-row" style="font-size:9px;color:var(--muted);border-bottom:1px solid var(--border2);padding-bottom:4px;">
-        <span>SYMBOL</span><span></span><span>5D RET</span><span>RS vs SPY</span><span>VS MA20</span>
+        <span>SYMBOL</span><span></span><span>5D RET</span><span>RS vs SPY</span><span>STATUS</span>
       </div>
       <div id="laggards-rows">Loading...</div>
     </div>
@@ -427,7 +426,7 @@ async function fetchData(force = false) {
 
   setStatus('updating');
   const isColdStart = lastData === null; // první načtení -- backend možná ještě "spí" na Railway
-  const timeoutMs = isColdStart ? 60000 : 8000;
+  const timeoutMs = isColdStart ? 25000 : 8000;
   try {
     let data;
     try {
@@ -493,7 +492,6 @@ function renderAll(d) {
   renderSectors(d.momentum.sectors);
   renderScoreBreakdown(d);
   renderTimestamp(d);
-  renderModeDiff(d);
   document.getElementById('date-display').textContent = new Date().toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
 }
 
@@ -545,12 +543,13 @@ function renderTicker(d) {
     {sym:'VIX', val:vol.vix_level.toFixed(2), chg:signed(vol.vix_trend_5d, 1)+' 5d', dir:vixDir, tone:invert(vixDir)},
     {sym:'DXY', val:mac.dxy_level.toFixed(2), chg:mac.dxy_trend, dir:dxyDir, tone:invert(dxyDir)},
     {sym:'TNX', val:mac.tsy10_yield.toFixed(2)+'%', chg:mac.tsy10_trend, dir:tnxDir, tone:invert(tnxDir)},
+    {sym:'P/C', val:vol.put_call_ratio.toFixed(2), chg:'put/call', dir:'none', tone:'neutral'},
     ...mom.sectors.slice(0,6).map(s => {
       const dir = pctDir(s.chg5d, 0.3);
       return {sym:s.symbol, val:signed(s.chg5d, 1), chg:'5d', dir, tone:sameTone(dir)};
     })
   ];
-  const arrowSym = {up:'↑', dn:'↓', flat:'→'};
+  const arrowSym = {up:'↑', dn:'↓', flat:'→', none:''};
   const doubled = [...items, ...items];
   document.getElementById('ticker-track').innerHTML = doubled.map(t =>
     `<span class="tick-item"><span class="tick-sym">${t.sym}</span><span class="tick-arrow ${t.tone}">${arrowSym[t.dir]}</span><span class="tick-val">${t.val}</span><span class="tick-chg ${t.tone}">${t.chg}</span></span>`
@@ -561,18 +560,18 @@ function renderTicker(d) {
 function renderHero(d) {
   const mqs = d.mqs[currentMode];
   const dec = d.decision[currentMode];
-  const colMap = { FULL:'#00e676', REDUCED:'#ffab00', SMALL:'#ff3d3d' };
-  const col = colMap[dec] || 'var(--muted)';
+  const colMap = { YES:'#00e676', CAUTION:'#ffab00', NO:'#ff3d3d' };
+  const col = colMap[dec] || '#ffab00';
 
-  document.getElementById('decision-badge').textContent  = dec || 'N/A';
-  document.getElementById('decision-badge').className    = 'decision-badge wrap-tip ' + (dec || '');
-  document.getElementById('mqs-num').textContent         = mqs ?? '—';
-  document.getElementById('total-score').textContent     = mqs ?? '—';
+  document.getElementById('decision-badge').textContent  = dec;
+  document.getElementById('decision-badge').className    = 'decision-badge ' + dec;
+  document.getElementById('mqs-num').textContent         = mqs;
+  document.getElementById('total-score').textContent     = mqs;
   document.getElementById('total-score').style.color     = col;
   document.getElementById('score-mode-label').textContent = currentMode.toUpperCase() + ' MQ SCORE';
 
   const circ   = 2 * Math.PI * 37;
-  const offset = circ - ((mqs ?? 0) / 100) * circ;
+  const offset = circ - (mqs / 100) * circ;
   const ring   = document.getElementById('ring-circle');
   ring.style.transition      = 'stroke-dashoffset 1s ease, stroke 0.4s';
   ring.style.strokeDasharray = circ;
@@ -582,15 +581,7 @@ function renderHero(d) {
 
 // ── EWS ──
 function renderEWS(ews) {
-  if (!ews) {
-    document.getElementById('ews-num').textContent = 'N/A';
-    document.getElementById('ews-num').style.color = 'var(--muted)';
-    document.getElementById('ews-label').textContent = '';
-    document.getElementById('ews-bar').style.width = '0%';
-    document.getElementById('ews-details').textContent = 'Breakout data unavailable (S&P 500 breadth failed).';
-    return;
-  }
-  const col = {STRONG:'#00e676', NORMAL:'#ffab00', WEAK:'#ff6d00', POOR:'#ff3d3d'}[ews.label] || 'var(--muted)';
+  const col = ews.score >= 65 ? '#00e676' : ews.score >= 45 ? '#ffab00' : '#ff3d3d';
   document.getElementById('ews-num').textContent    = ews.score;
   document.getElementById('ews-num').style.color    = col;
   const lbl = document.getElementById('ews-label');
@@ -680,54 +671,32 @@ function renderSummary(d) {
   const dec = d.decision[currentMode];
   const mqs = d.mqs[currentMode];
   const adviceMap = {
-    FULL:    '<strong style="color:#00e676;">Calm regime — normal position size. Moves tend to be small.</strong>',
-    REDUCED: '<strong style="color:#ffab00;">Mixed regime — reduce size (~½); expect larger swings.</strong>',
-    SMALL:   '<strong style="color:#ff3d3d;">Volatile regime — small size (~¼), wider stops. Swings ~2× larger; not a no-trade signal.</strong>'
+    YES:     '<strong style="color:#00e676;">Full position sizing. Press risk on quality setups.</strong>',
+    CAUTION: '<strong style="color:#ffab00;">Half sizing only. A+ setups only. Tight stops.</strong>',
+    NO:      '<strong style="color:#ff3d3d;">Preserve capital. No new entries. Reduce exposure.</strong>'
   };
-  if (currentMode === 'intraday') {
-    const i = d.intraday;
-    const signed = (x, dp=2) => (x >= 0 ? '+' : '') + x.toFixed(dp) + '%';
-    document.getElementById('summary-text').innerHTML = !i ? 'Intraday data unavailable.' :
-      `${i.market_open ? 'Session in progress' : '<strong style="color:#ff3d3d;">Market closed</strong> — last session'} (${i.session_date}). ` +
-      `SPY ${i.spy_price.toFixed(2)} vs VWAP ${i.vwap.toFixed(2)} (${signed(i.vwap_dist_pct)})` +
-      (i.or_state === 'forming' ? ', opening range still forming. ' : `, ${i.or_state} opening range ${i.or_low.toFixed(2)}–${i.or_high.toFixed(2)}. `) +
-      (i.qqq_vwap_pct !== null ? `QQQ ${signed(i.qqq_vwap_pct)} vs VWAP. ` : '') +
-      `Range so far ${i.range_pct.toFixed(2)}% = ${i.range_ratio.toFixed(2)}× expected for this time of day. ` +
-      (i.vix_chg_pct !== null ? `VIX ${signed(i.vix_chg_pct, 1)} since open. ` : '') +
-      (i.advancing !== null ? `S&P 500 A/D ${i.advancing}/${i.declining}. ` : '') +
-      (i.time_window ? `${i.time_window} (${i.time_penalty} pts). ` : '') +
-      (mqs !== null ? `Intraday MQS ${mqs} → ${adviceMap[dec]}` : '');
-    return;
-  }
   const regime = t.regime;
   const regimeCol = regime==='UPTREND'?'#00e676': regime==='DOWNTREND'?'#ff3d3d':'#ffab00';
   document.getElementById('summary-text').innerHTML =
     `Regime: <strong style="color:${regimeCol};">${regime}</strong>. ` +
     `VIX ${v.vix_level.toFixed(1)} (${v.vix_regime}, ${v.vix_pct1y}th pct 1Y). ` +
     `SPY ${t.spy_price.toFixed(0)} — ${t.spy_vs_ma50.includes('ABOVE')?'above':'below'} 50d MA, RSI ${Math.round(t.spy_rsi14)}. ` +
-    (b ? `Breadth: ${b.above50}% of S&P 500 above 50d MA (${b.advancing} adv / ${b.declining} dec). `
-       : 'Breadth unavailable. ') +
+    `Breadth contracting: ${b.above50}% above 50d MA. ` +
     `Sector leadership ${mo.rs_spread > 6 ? 'narrow and rotating' : 'broad'}; ` +
     `top: ${mo.top3.join(', ')} / lag: ${mo.bottom3.join(', ')}. ` +
     `10Y ${m.tsy10_yield.toFixed(2)}% ${m.tsy10_trend}, DXY ${m.dxy_level.toFixed(1)} ${m.dxy_trend}. ` +
-    (m.fed_stance
-      ? `Fed funds ${m.fed_rate.toFixed(2)}%, 2Y ${m.tsy2_yield.toFixed(2)}% → market prices ${m.fed_stance==='HAWKISH'?'hikes':m.fed_stance==='DOVISH'?'cuts':'no change'}. `
-      : 'Fed data unavailable. ') +
+    `FED ${m.fed_stance} at ${m.fed_rate}. ` +
     `MQS ${mqs} → ${adviceMap[dec]}`;
 }
 
 // ── LEADERS ──
 function renderLeaders(ls) {
-  if (!ls) {
-    ['leaders-rows', 'laggards-rows'].forEach(id => document.getElementById(id).innerHTML =
-      '<div style="font-size:10px;color:var(--red);padding:8px 0;">S&amp;P 500 data unavailable</div>');
-    return;
-  }
+  if (!ls) return;
   const renderRows = (arr, container) => {
     const el = document.getElementById(container);
     if (!el) return;
     if (!arr || arr.length === 0) {
-      el.innerHTML = '<div style="font-size:10px;color:var(--muted);padding:8px 0;">No data</div>';
+      el.innerHTML = '<div style="font-size:10px;color:var(--muted);padding:8px 0;">No data — API connecting...</div>';
       return;
     }
     el.innerHTML = arr.map(s => {
@@ -740,7 +709,7 @@ function renderLeaders(ls) {
         <span class="lead-arrow" style="color:${s.ret5d>=0?'#00e676':'#ff3d3d'}">${s.ret5d>=0?'↑':'↓'}</span>
         <span class="lead-val ${cls5}">${s.ret5d>=0?'+':''}${ret5}%</span>
         <span class="lead-val ${clsRS}">${s.rs_vs_spy>=0?'+':''}${rsspy}%</span>
-        <span class="lead-hold ${s.above_ma20?'yes':'no'}">${s.above_ma20?'ABOVE':'BELOW'}</span>
+        <span class="lead-hold ${s.holding?'yes':'no'}">${s.holding?'HOLDING':'FAILING'}</span>
       </div>`;
     }).join('');
   };
@@ -770,12 +739,6 @@ function renderPanels(d) {
   function interpTxt(s) { return s >= 65 ? 'HEALTHY' : s >= 50 ? 'MODERATE' : s >= 35 ? 'WEAKENING' : 'RISK-OFF'; }
 
   function panel(title, rows, score, tip) {
-    if (score === null) {
-      return `<div class="data-panel" data-tip="${tip}">
-        <div class="dp-title">${title}</div>
-        <div class="dp-row"><span class="dp-key" style="color:var(--red);">Data unavailable — excluded from MQS</span></div>
-      </div>`;
-    }
     const sc = scoreColor(score); const ic = interpCls(score); const it = interpTxt(score);
     return `<div class="data-panel" data-tip="${tip}">
       <div class="dp-title">${title}</div>
@@ -801,7 +764,8 @@ function renderPanels(d) {
       row('VIX 5d Trend',  (v.vix_trend_5d>=0?'+':'')+v.vix_trend_5d.toFixed(1)+'%', vixSym, vixTone, v.vix_trend_5d>5?'dn':'warn'),
       row('1Y Percentile', v.vix_pct1y+'th pct',     v.vix_pct1y>70?'↑':'→', v.vix_pct1y>70?'dn':'neutral', v.vix_pct1y>70?'dn':'warn'),
       row('VVIX',          v.vvix_available ? v.vvix_level.toFixed(1) : 'N/A', '→', 'neutral', 'warn'),
-    ].join(''), d.scores.volatility, 'Weight 25% of swing MQS. VIX <18 = ideal'),
+      row('Put/Call',      v.put_call_ratio.toFixed(2), arr2sym(v.put_call_arrow), arr2dir(v.put_call_arrow), v.put_call_ratio>1.1?'dn':'warn'),
+    ].join(''), d.scores.volatility, 'Weight 25% (swing) / 30% (intraday). VIX <18 = ideal'),
 
     panel('TREND', [
       row('SPY/MA200', t.spy_vs_ma200, arr2sym(t.spy_vs_ma200_arrow), arr2dir(t.spy_vs_ma200_arrow), t.spy_vs_ma200.includes('ABOVE')?'up':'dn'),
@@ -809,18 +773,16 @@ function renderPanels(d) {
       row('SPY/MA20',  t.spy_vs_ma20,  arr2sym(t.spy_vs_ma20_arrow),  arr2dir(t.spy_vs_ma20_arrow),  t.spy_vs_ma20.includes('ABOVE')?'up':'dn'),
       row('QQQ/MA50',  t.qqq_vs_ma50,  arr2sym(t.qqq_vs_ma50_arrow),  arr2dir(t.qqq_vs_ma50_arrow),  t.qqq_vs_ma50.includes('ABOVE')?'up':'dn'),
       row('RSI(14)',   Math.round(t.spy_rsi14).toString(), arr2sym(t.spy_rsi_arrow),  arr2dir(t.spy_rsi_arrow), t.spy_rsi14>55?'up':t.spy_rsi14<45?'dn':'warn'),
-    ].join(''), d.scores.trend, 'Regime: '+t.regime+'. Weight 20% of swing MQS'),
+    ].join(''), d.scores.trend, 'Regime: '+t.regime+'. Weight 20% (swing) / 15% (intraday)'),
 
-    panel('BREADTH · S&P 500', b ? [
+    panel('BREADTH', [
       row('% > MA200',  b.above200+'%', arr2sym(b.above200_arrow), arr2dir(b.above200_arrow), b.above200>60?'up':b.above200>45?'warn':'dn'),
       row('% > MA50',   b.above50+'%',  arr2sym(b.above50_arrow),  arr2dir(b.above50_arrow),  b.above50>60?'up':b.above50>45?'warn':'dn'),
       row('% > MA20',   b.above20+'%',  arr2sym(b.above20_arrow),  arr2dir(b.above20_arrow),  b.above20>55?'up':b.above20>40?'warn':'dn'),
-      row('Adv / Dec',  b.advancing+' / '+b.declining, arr2sym(b.ad_ratio_arrow), arr2dir(b.ad_ratio_arrow), b.ad_ratio>0.55?'up':b.ad_ratio>0.45?'warn':'dn'),
-      row('NH-NL (52w)',b.nh_nl.toString(), arr2sym(b.nh_nl_arrow), arr2dir(b.nh_nl_arrow), b.nh_nl>0?'up':b.nh_nl<0?'dn':'warn'),
-      row('McClellan',  b.mcclellan.toFixed(1), b.mcclellan>=0?'↑':'↓', b.mcclellan>=0?'up':'dn', b.mcclellan>=0?'up':'dn'),
-    ].join('') : '', d.scores.breadth,
-      b ? `${b.n_stocks} S&P 500 stocks, as of ${new Date(b.updated_at).toLocaleTimeString('cs-CZ', {hour:'2-digit', minute:'2-digit'})} (refresh 15 min)${b.excluded.length ? '. Excluded (unadjusted corporate action): ' + b.excluded.join(', ') : ''}. McClellan = EMA19−EMA39 of net advances`
-        : 'S&P 500 breadth unavailable'),
+      row('Adv %',      Math.round(b.ad_ratio * 100) + '%', arr2sym(b.ad_ratio_arrow), arr2dir(b.ad_ratio_arrow), b.ad_ratio>0.55?'up':b.ad_ratio>0.45?'warn':'dn'),
+      row('NH-NL',      b.nh_nl.toString(), arr2sym(b.nh_nl_arrow), arr2dir(b.nh_nl_arrow), b.nh_nl>0?'up':b.nh_nl>-50?'warn':'dn'),
+      b.mcclellan_available ? row('McClellan', b.mcclellan.toFixed(1), b.mcclellan>=0?'↑':'↓', b.mcclellan>=0?'up':'dn', b.mcclellan>20?'up':b.mcclellan>-20?'warn':'dn') : ''
+    ].join(''), d.scores.breadth, 'Weight 20% (swing). McClellan Osc: >20 bullish, <-20 bearish'),
 
     panel('MOMENTUM', [
       row('SPY 5d Ret',  (mo.spy_5d>=0?'+':'')+mo.spy_5d.toFixed(1)+'%', arr2sym(mo.spy_5d_arrow), arr2dir(mo.spy_5d_arrow), mo.spy_5d>=0?'up':'dn'),
@@ -843,15 +805,11 @@ function renderPanels(d) {
       row('DXY Trend',    m.dxy_trend.toUpperCase(), trendArrow(m.dxy_trend),
           (m.dxy_trend==='rising'?'dn':m.dxy_trend==='falling'?'up':'warn'),
           (m.dxy_trend==='rising'?'dn':m.dxy_trend==='falling'?'up':'warn')),
-      row('2Y − Fed Funds', m.fed_stance ? (m.fed_spread>=0?'+':'')+m.fed_spread.toFixed(2)+' pp' : 'N/A', '', 'neutral',
-          (m.fed_stance==='HAWKISH'?'dn':m.fed_stance==='DOVISH'?'up':'warn')),
-      row('FED Stance',   m.fed_stance || 'N/A',
+      row('FED Stance',   m.fed_stance,
           (m.fed_stance==='HAWKISH'?'↓':m.fed_stance==='DOVISH'?'↑':'→'),
           (m.fed_stance==='HAWKISH'?'dn':m.fed_stance==='DOVISH'?'up':'warn'),
           (m.fed_stance==='HAWKISH'?'dn':m.fed_stance==='DOVISH'?'up':'warn')),
-    ].join(''), d.scores.macro, m.fed_stance
-      ? `Fed funds ${m.fed_rate.toFixed(2)}%, 2Y ${m.tsy2_yield.toFixed(2)}%. 2Y > fed funds +0.25 = market prices hikes (HAWKISH), < -0.25 = cuts (DOVISH)`
-      : 'Fed data unavailable (FRED)'),
+    ].join(''), d.scores.macro, 'FED rate: '+m.fed_rate+'. Rising DXY = headwind for equities'),
   ];
 
   document.getElementById('panels-grid').innerHTML = panels.join('');
@@ -880,20 +838,9 @@ function renderSectors(sectors) {
 
 // ── SCORE BREAKDOWN ──
 function renderScoreBreakdown(d) {
-  if (currentMode === 'intraday' && !d.intraday) {
-    document.getElementById('score-breakdown').innerHTML = '<div style="font-size:10px;color:var(--red);">Intraday data unavailable</div>';
-    return;
-  }
-  const s = currentMode === 'intraday' ? d.intraday.scores : d.scores;
-  // chybějící složka (null) se z MQS vynechá -> váhy ostatních se přepočtou na 100 %
-  const rawW = d.weights[currentMode];
-  const wSum = Object.keys(rawW).filter(k => s[k] !== null).reduce((a, k) => a + rawW[k], 0);
-  const w = Object.fromEntries(Object.entries(rawW).map(([k, v]) => [k, s[k] === null ? 0 : Math.round(v / wSum * 1000) / 10]));
-  const cats = currentMode === 'intraday' ? [
-    {cat:'TREND (VWAP / OR)',     key:'trend'},
-    {cat:'VOLATILITY (RANGE/VIX)', key:'volatility'},
-    {cat:'BREADTH (A/D TODAY)',   key:'breadth'}
-  ] : [
+  const w = d.weights[currentMode];
+  const s = d.scores;
+  const cats = [
     {cat:'VOLATILITY',        key:'volatility'},
     {cat:'MOMENTUM',          key:'momentum'},
     {cat:'TREND',             key:'trend'},
@@ -904,11 +851,6 @@ function renderScoreBreakdown(d) {
   document.getElementById('score-breakdown').innerHTML = cats.map(c => {
     const score  = s[c.key];
     const weight = w[c.key];
-    if (score === null) {
-      return `<div class="score-cat-row"><div class="score-cat-header">
-        <span class="score-cat-name">${c.cat}</span><span style="font-size:10px;color:var(--red)">N/A</span>
-      </div></div>`;
-    }
     const contrib= (score * weight / 100).toFixed(1);
     const col    = colFn(score);
     const tip    = `Score ${score} × weight ${weight}% = +${contrib} pts`;
@@ -919,11 +861,7 @@ function renderScoreBreakdown(d) {
       </div>
       <div class="score-cat-bar"><div class="score-cat-fill" style="width:${score}%;background:${col};"></div></div>
     </div>`;
-  }).join('') + (currentMode === 'intraday' && d.intraday.time_penalty
-    ? `<div class="score-cat-row"><div class="score-cat-header">
-        <span class="score-cat-name">TIME OF DAY</span>
-        <span style="font-size:10px;color:var(--amber)">${d.intraday.time_window} → ${d.intraday.time_penalty}</span>
-      </div></div>` : '');
+  }).join('');
 }
 
 function renderTimestamp(d) {
@@ -934,33 +872,18 @@ function renderTimestamp(d) {
     `Regime: ${d.trend.regime} · SIIBT Terminal v3.3`;
 }
 
-function renderModeDiff(d) {
-  const lines = currentMode === 'swing'
-    ? ['Horizon: 3–10 days/trade', 'Daily bars, 1y history', 'FULL ≥80, REDUCED ≥60']
-    : ['Horizon: minutes–hours', '5-min bars, regular session', 'FULL ≥75, REDUCED ≥58'];
-  const html = lines.map(t => `<div>▶ <span>${t}</span></div>`);
-  const i = d && d.intraday;
-  if (currentMode === 'intraday') {
-    if (!i) {
-      html.push('<div style="color:var(--red);">▶ Intraday data unavailable</div>');
-    } else {
-      const asOf = new Date(i.as_of).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit', timeZone:'America/New_York'});
-      html.push(i.market_open
-        ? `<div style="color:var(--green);">▶ MARKET OPEN · as of ${asOf} ET</div>`
-        : `<div style="color:var(--red);">▶ MARKET CLOSED · last session ${i.session_date.split('-').reverse().join('.')}</div>`);
-      if (i.time_window) html.push(`<div style="color:var(--amber);">▶ ${i.time_window}: ${i.time_penalty} pts</div>`);
-    }
-  }
-  document.getElementById('mode-diff').innerHTML = html.join('');
-}
-
 // ── MODE SWITCH ──
 function setMode(mode) {
   currentMode = mode;
   document.getElementById('btn-swing').className = 'mode-btn' + (mode==='swing'?' active':'');
   document.getElementById('btn-day').className   = 'mode-btn' + (mode==='intraday'?' active':'');
 
-  renderModeDiff(lastData);
+  const diffs = {
+    swing:    ['Horizon: 3–10 days/trade','VIX tolerance: up to 28','YES ≥80, CAUTION ≥60','EWS: informational only'],
+    intraday: ['Horizon: minutes–hours','VIX tolerance: max 22','YES ≥75, CAUTION ≥58','Volatility weight: 30%']
+  };
+  document.getElementById('mode-diff').innerHTML = diffs[mode].map(t=>`<div>▶ <span>${t}</span></div>`).join('');
+
   if (lastData) {
     renderHero(lastData);
     renderPanels(lastData);
