@@ -493,6 +493,7 @@ function renderAll(d) {
   renderSectors(d.momentum.sectors);
   renderScoreBreakdown(d);
   renderTimestamp(d);
+  renderModeDiff(d);
   document.getElementById('date-display').textContent = new Date().toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
 }
 
@@ -561,17 +562,17 @@ function renderHero(d) {
   const mqs = d.mqs[currentMode];
   const dec = d.decision[currentMode];
   const colMap = { FULL:'#00e676', REDUCED:'#ffab00', SMALL:'#ff3d3d' };
-  const col = colMap[dec] || '#ffab00';
+  const col = colMap[dec] || 'var(--muted)';
 
-  document.getElementById('decision-badge').textContent  = dec;
-  document.getElementById('decision-badge').className    = 'decision-badge ' + dec;
-  document.getElementById('mqs-num').textContent         = mqs;
-  document.getElementById('total-score').textContent     = mqs;
+  document.getElementById('decision-badge').textContent  = dec || 'N/A';
+  document.getElementById('decision-badge').className    = 'decision-badge wrap-tip ' + (dec || '');
+  document.getElementById('mqs-num').textContent         = mqs ?? '—';
+  document.getElementById('total-score').textContent     = mqs ?? '—';
   document.getElementById('total-score').style.color     = col;
   document.getElementById('score-mode-label').textContent = currentMode.toUpperCase() + ' MQ SCORE';
 
   const circ   = 2 * Math.PI * 37;
-  const offset = circ - (mqs / 100) * circ;
+  const offset = circ - ((mqs ?? 0) / 100) * circ;
   const ring   = document.getElementById('ring-circle');
   ring.style.transition      = 'stroke-dashoffset 1s ease, stroke 0.4s';
   ring.style.strokeDasharray = circ;
@@ -683,6 +684,21 @@ function renderSummary(d) {
     REDUCED: '<strong style="color:#ffab00;">Mixed regime — reduce size (~½); expect larger swings.</strong>',
     SMALL:   '<strong style="color:#ff3d3d;">Volatile regime — small size (~¼), wider stops. Swings ~2× larger; not a no-trade signal.</strong>'
   };
+  if (currentMode === 'intraday') {
+    const i = d.intraday;
+    const signed = (x, dp=2) => (x >= 0 ? '+' : '') + x.toFixed(dp) + '%';
+    document.getElementById('summary-text').innerHTML = !i ? 'Intraday data unavailable.' :
+      `${i.market_open ? 'Session in progress' : '<strong style="color:#ff3d3d;">Market closed</strong> — last session'} (${i.session_date}). ` +
+      `SPY ${i.spy_price.toFixed(2)} vs VWAP ${i.vwap.toFixed(2)} (${signed(i.vwap_dist_pct)})` +
+      (i.or_state === 'forming' ? ', opening range still forming. ' : `, ${i.or_state} opening range ${i.or_low.toFixed(2)}–${i.or_high.toFixed(2)}. `) +
+      (i.qqq_vwap_pct !== null ? `QQQ ${signed(i.qqq_vwap_pct)} vs VWAP. ` : '') +
+      `Range so far ${i.range_pct.toFixed(2)}% = ${i.range_ratio.toFixed(2)}× expected for this time of day. ` +
+      (i.vix_chg_pct !== null ? `VIX ${signed(i.vix_chg_pct, 1)} since open. ` : '') +
+      (i.advancing !== null ? `S&P 500 A/D ${i.advancing}/${i.declining}. ` : '') +
+      (i.time_window ? `${i.time_window} (${i.time_penalty} pts). ` : '') +
+      (mqs !== null ? `Intraday MQS ${mqs} → ${adviceMap[dec]}` : '');
+    return;
+  }
   const regime = t.regime;
   const regimeCol = regime==='UPTREND'?'#00e676': regime==='DOWNTREND'?'#ff3d3d':'#ffab00';
   document.getElementById('summary-text').innerHTML =
@@ -781,7 +797,7 @@ function renderPanels(d) {
       row('VIX 5d Trend',  (v.vix_trend_5d>=0?'+':'')+v.vix_trend_5d.toFixed(1)+'%', vixSym, vixTone, v.vix_trend_5d>5?'dn':'warn'),
       row('1Y Percentile', v.vix_pct1y+'th pct',     v.vix_pct1y>70?'↑':'→', v.vix_pct1y>70?'dn':'neutral', v.vix_pct1y>70?'dn':'warn'),
       row('VVIX',          v.vvix_available ? v.vvix_level.toFixed(1) : 'N/A', '→', 'neutral', 'warn'),
-    ].join(''), d.scores.volatility, 'Weight 25% (swing) / 30% (intraday). VIX <18 = ideal'),
+    ].join(''), d.scores.volatility, 'Weight 25% of swing MQS. VIX <18 = ideal'),
 
     panel('TREND', [
       row('SPY/MA200', t.spy_vs_ma200, arr2sym(t.spy_vs_ma200_arrow), arr2dir(t.spy_vs_ma200_arrow), t.spy_vs_ma200.includes('ABOVE')?'up':'dn'),
@@ -789,7 +805,7 @@ function renderPanels(d) {
       row('SPY/MA20',  t.spy_vs_ma20,  arr2sym(t.spy_vs_ma20_arrow),  arr2dir(t.spy_vs_ma20_arrow),  t.spy_vs_ma20.includes('ABOVE')?'up':'dn'),
       row('QQQ/MA50',  t.qqq_vs_ma50,  arr2sym(t.qqq_vs_ma50_arrow),  arr2dir(t.qqq_vs_ma50_arrow),  t.qqq_vs_ma50.includes('ABOVE')?'up':'dn'),
       row('RSI(14)',   Math.round(t.spy_rsi14).toString(), arr2sym(t.spy_rsi_arrow),  arr2dir(t.spy_rsi_arrow), t.spy_rsi14>55?'up':t.spy_rsi14<45?'dn':'warn'),
-    ].join(''), d.scores.trend, 'Regime: '+t.regime+'. Weight 20% (swing) / 15% (intraday)'),
+    ].join(''), d.scores.trend, 'Regime: '+t.regime+'. Weight 20% of swing MQS'),
 
     panel('BREADTH · S&P 500', b ? [
       row('% > MA200',  b.above200+'%', arr2sym(b.above200_arrow), arr2dir(b.above200_arrow), b.above200>60?'up':b.above200>45?'warn':'dn'),
@@ -860,12 +876,20 @@ function renderSectors(sectors) {
 
 // ── SCORE BREAKDOWN ──
 function renderScoreBreakdown(d) {
-  const s = d.scores;
+  if (currentMode === 'intraday' && !d.intraday) {
+    document.getElementById('score-breakdown').innerHTML = '<div style="font-size:10px;color:var(--red);">Intraday data unavailable</div>';
+    return;
+  }
+  const s = currentMode === 'intraday' ? d.intraday.scores : d.scores;
   // chybějící složka (null) se z MQS vynechá -> váhy ostatních se přepočtou na 100 %
   const rawW = d.weights[currentMode];
   const wSum = Object.keys(rawW).filter(k => s[k] !== null).reduce((a, k) => a + rawW[k], 0);
   const w = Object.fromEntries(Object.entries(rawW).map(([k, v]) => [k, s[k] === null ? 0 : Math.round(v / wSum * 1000) / 10]));
-  const cats = [
+  const cats = currentMode === 'intraday' ? [
+    {cat:'TREND (VWAP / OR)',     key:'trend'},
+    {cat:'VOLATILITY (RANGE/VIX)', key:'volatility'},
+    {cat:'BREADTH (A/D TODAY)',   key:'breadth'}
+  ] : [
     {cat:'VOLATILITY',        key:'volatility'},
     {cat:'MOMENTUM',          key:'momentum'},
     {cat:'TREND',             key:'trend'},
@@ -891,7 +915,11 @@ function renderScoreBreakdown(d) {
       </div>
       <div class="score-cat-bar"><div class="score-cat-fill" style="width:${score}%;background:${col};"></div></div>
     </div>`;
-  }).join('');
+  }).join('') + (currentMode === 'intraday' && d.intraday.time_penalty
+    ? `<div class="score-cat-row"><div class="score-cat-header">
+        <span class="score-cat-name">TIME OF DAY</span>
+        <span style="font-size:10px;color:var(--amber)">${d.intraday.time_window} → ${d.intraday.time_penalty}</span>
+      </div></div>` : '');
 }
 
 function renderTimestamp(d) {
@@ -902,18 +930,33 @@ function renderTimestamp(d) {
     `Regime: ${d.trend.regime} · SIIBT Terminal v3.3`;
 }
 
+function renderModeDiff(d) {
+  const lines = currentMode === 'swing'
+    ? ['Horizon: 3–10 days/trade', 'Daily bars, 1y history', 'FULL ≥80, REDUCED ≥60']
+    : ['Horizon: minutes–hours', '5-min bars, regular session', 'FULL ≥75, REDUCED ≥58'];
+  const html = lines.map(t => `<div>▶ <span>${t}</span></div>`);
+  const i = d && d.intraday;
+  if (currentMode === 'intraday') {
+    if (!i) {
+      html.push('<div style="color:var(--red);">▶ Intraday data unavailable</div>');
+    } else {
+      const asOf = new Date(i.as_of).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit', timeZone:'America/New_York'});
+      html.push(i.market_open
+        ? `<div style="color:var(--green);">▶ MARKET OPEN · as of ${asOf} ET</div>`
+        : `<div style="color:var(--red);">▶ MARKET CLOSED · last session ${i.session_date.split('-').reverse().join('.')}</div>`);
+      if (i.time_window) html.push(`<div style="color:var(--amber);">▶ ${i.time_window}: ${i.time_penalty} pts</div>`);
+    }
+  }
+  document.getElementById('mode-diff').innerHTML = html.join('');
+}
+
 // ── MODE SWITCH ──
 function setMode(mode) {
   currentMode = mode;
   document.getElementById('btn-swing').className = 'mode-btn' + (mode==='swing'?' active':'');
   document.getElementById('btn-day').className   = 'mode-btn' + (mode==='intraday'?' active':'');
 
-  const diffs = {
-    swing:    ['Horizon: 3–10 days/trade','VIX tolerance: up to 28','FULL ≥80, REDUCED ≥60','EWS: informational only'],
-    intraday: ['Horizon: minutes–hours','VIX tolerance: max 22','FULL ≥75, REDUCED ≥58','Volatility weight: 30%']
-  };
-  document.getElementById('mode-diff').innerHTML = diffs[mode].map(t=>`<div>▶ <span>${t}</span></div>`).join('');
-
+  renderModeDiff(lastData);
   if (lastData) {
     renderHero(lastData);
     renderPanels(lastData);
