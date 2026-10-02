@@ -319,7 +319,7 @@ body.stale .main { opacity:0.45; }
       <div class="exec-row">
         <!-- EWS -->
         <div class="exec-panel">
-          <div class="panel-title">EXECUTION WINDOW SCORE</div>
+          <div class="panel-title" data-tip="Breakout = first close above prior 20-day high, S&P 500 stocks. Score = % still above that pivot 5 sessions later.">EXECUTION WINDOW · BREAKOUT FOLLOW-THROUGH</div>
           <div class="exec-score-row">
             <div class="exec-score-num" id="ews-num" style="color:var(--amber)">—</div>
             <div class="exec-sub" id="ews-label">/ 100</div>
@@ -581,7 +581,15 @@ function renderHero(d) {
 
 // ── EWS ──
 function renderEWS(ews) {
-  const col = ews.score >= 65 ? '#00e676' : ews.score >= 45 ? '#ffab00' : '#ff3d3d';
+  if (!ews) {
+    document.getElementById('ews-num').textContent = 'N/A';
+    document.getElementById('ews-num').style.color = 'var(--muted)';
+    document.getElementById('ews-label').textContent = '';
+    document.getElementById('ews-bar').style.width = '0%';
+    document.getElementById('ews-details').textContent = 'Breakout data unavailable (S&P 500 breadth failed).';
+    return;
+  }
+  const col = {STRONG:'#00e676', NORMAL:'#ffab00', WEAK:'#ff6d00', POOR:'#ff3d3d'}[ews.label] || 'var(--muted)';
   document.getElementById('ews-num').textContent    = ews.score;
   document.getElementById('ews-num').style.color    = col;
   const lbl = document.getElementById('ews-label');
@@ -686,7 +694,9 @@ function renderSummary(d) {
     `Sector leadership ${mo.rs_spread > 6 ? 'narrow and rotating' : 'broad'}; ` +
     `top: ${mo.top3.join(', ')} / lag: ${mo.bottom3.join(', ')}. ` +
     `10Y ${m.tsy10_yield.toFixed(2)}% ${m.tsy10_trend}, DXY ${m.dxy_level.toFixed(1)} ${m.dxy_trend}. ` +
-    `FED ${m.fed_stance} at ${m.fed_rate}. ` +
+    (m.fed_stance
+      ? `Fed funds ${m.fed_rate.toFixed(2)}%, 2Y ${m.tsy2_yield.toFixed(2)}% → market prices ${m.fed_stance==='HAWKISH'?'hikes':m.fed_stance==='DOVISH'?'cuts':'no change'}. `
+      : 'Fed data unavailable. ') +
     `MQS ${mqs} → ${adviceMap[dec]}`;
 }
 
@@ -813,11 +823,15 @@ function renderPanels(d) {
       row('DXY Trend',    m.dxy_trend.toUpperCase(), trendArrow(m.dxy_trend),
           (m.dxy_trend==='rising'?'dn':m.dxy_trend==='falling'?'up':'warn'),
           (m.dxy_trend==='rising'?'dn':m.dxy_trend==='falling'?'up':'warn')),
-      row('FED Stance',   m.fed_stance,
+      row('2Y − Fed Funds', m.fed_stance ? (m.fed_spread>=0?'+':'')+m.fed_spread.toFixed(2)+' pp' : 'N/A', '', 'neutral',
+          (m.fed_stance==='HAWKISH'?'dn':m.fed_stance==='DOVISH'?'up':'warn')),
+      row('FED Stance',   m.fed_stance || 'N/A',
           (m.fed_stance==='HAWKISH'?'↓':m.fed_stance==='DOVISH'?'↑':'→'),
           (m.fed_stance==='HAWKISH'?'dn':m.fed_stance==='DOVISH'?'up':'warn'),
           (m.fed_stance==='HAWKISH'?'dn':m.fed_stance==='DOVISH'?'up':'warn')),
-    ].join(''), d.scores.macro, 'FED rate: '+m.fed_rate+'. Rising DXY = headwind for equities'),
+    ].join(''), d.scores.macro, m.fed_stance
+      ? `Fed funds ${m.fed_rate.toFixed(2)}%, 2Y ${m.tsy2_yield.toFixed(2)}%. 2Y > fed funds +0.25 = market prices hikes (HAWKISH), < -0.25 = cuts (DOVISH)`
+      : 'Fed data unavailable (FRED)'),
   ];
 
   document.getElementById('panels-grid').innerHTML = panels.join('');
