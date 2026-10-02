@@ -348,16 +348,16 @@ body.stale .main { opacity:0.45; }
   <!-- LEADING STOCKS + EWS DETAIL -->
   <div class="leads-row">
     <div class="leads-panel">
-      <div class="panel-title">RS LEADERS — TOP 5 RELATIVE STRENGTH (20D VS SPY)</div>
+      <div class="panel-title">RS LEADERS — TOP 5 OF S&amp;P 500 (20D VS SPY)</div>
       <div class="lead-row" style="font-size:9px;color:var(--muted);border-bottom:1px solid var(--border2);padding-bottom:4px;">
-        <span>SYMBOL</span><span></span><span>5D RET</span><span>RS vs SPY</span><span>HOLDING</span>
+        <span>SYMBOL</span><span></span><span>5D RET</span><span>RS vs SPY</span><span>VS MA20</span>
       </div>
       <div id="leaders-rows">Loading...</div>
     </div>
     <div class="leads-panel">
-      <div class="panel-title">RS LAGGARDS — BOTTOM 3 + SECTOR CONTEXT</div>
+      <div class="panel-title">RS LAGGARDS — BOTTOM 3 OF S&amp;P 500 (20D VS SPY)</div>
       <div class="lead-row" style="font-size:9px;color:var(--muted);border-bottom:1px solid var(--border2);padding-bottom:4px;">
-        <span>SYMBOL</span><span></span><span>5D RET</span><span>RS vs SPY</span><span>STATUS</span>
+        <span>SYMBOL</span><span></span><span>5D RET</span><span>RS vs SPY</span><span>VS MA20</span>
       </div>
       <div id="laggards-rows">Loading...</div>
     </div>
@@ -718,12 +718,16 @@ function renderSummary(d) {
 
 // ── LEADERS ──
 function renderLeaders(ls) {
-  if (!ls) return;
+  if (!ls) {
+    ['leaders-rows', 'laggards-rows'].forEach(id => document.getElementById(id).innerHTML =
+      '<div style="font-size:10px;color:var(--red);padding:8px 0;">S&amp;P 500 data unavailable</div>');
+    return;
+  }
   const renderRows = (arr, container) => {
     const el = document.getElementById(container);
     if (!el) return;
     if (!arr || arr.length === 0) {
-      el.innerHTML = '<div style="font-size:10px;color:var(--muted);padding:8px 0;">No data — API connecting...</div>';
+      el.innerHTML = '<div style="font-size:10px;color:var(--muted);padding:8px 0;">No data</div>';
       return;
     }
     el.innerHTML = arr.map(s => {
@@ -736,7 +740,7 @@ function renderLeaders(ls) {
         <span class="lead-arrow" style="color:${s.ret5d>=0?'#00e676':'#ff3d3d'}">${s.ret5d>=0?'↑':'↓'}</span>
         <span class="lead-val ${cls5}">${s.ret5d>=0?'+':''}${ret5}%</span>
         <span class="lead-val ${clsRS}">${s.rs_vs_spy>=0?'+':''}${rsspy}%</span>
-        <span class="lead-hold ${s.holding?'yes':'no'}">${s.holding?'HOLDING':'FAILING'}</span>
+        <span class="lead-hold ${s.above_ma20?'yes':'no'}">${s.above_ma20?'ABOVE':'BELOW'}</span>
       </div>`;
     }).join('');
   };
@@ -815,7 +819,7 @@ function renderPanels(d) {
       row('NH-NL (52w)',b.nh_nl.toString(), arr2sym(b.nh_nl_arrow), arr2dir(b.nh_nl_arrow), b.nh_nl>0?'up':b.nh_nl<0?'dn':'warn'),
       row('McClellan',  b.mcclellan.toFixed(1), b.mcclellan>=0?'↑':'↓', b.mcclellan>=0?'up':'dn', b.mcclellan>=0?'up':'dn'),
     ].join('') : '', d.scores.breadth,
-      b ? `${b.n_stocks} S&P 500 stocks, as of ${new Date(b.updated_at).toLocaleTimeString('cs-CZ', {hour:'2-digit', minute:'2-digit'})} (refresh 15 min). McClellan = EMA19−EMA39 of net advances`
+      b ? `${b.n_stocks} S&P 500 stocks, as of ${new Date(b.updated_at).toLocaleTimeString('cs-CZ', {hour:'2-digit', minute:'2-digit'})} (refresh 15 min)${b.excluded.length ? '. Excluded (unadjusted corporate action): ' + b.excluded.join(', ') : ''}. McClellan = EMA19−EMA39 of net advances`
         : 'S&P 500 breadth unavailable'),
 
     panel('MOMENTUM', [
